@@ -4,3 +4,4 @@ redis
 werkzeug
 pyjwt
 python-dotenv
+flask-cors

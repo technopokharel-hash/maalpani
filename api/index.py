@@ -1,156 +1,101 @@
-from flask import Flask, redirect, request, jsonify, session
+import os, json, jwt
+from flask import Flask, redirect, request, jsonify, make_response
 import google.generativeai as genai
 import redis
-import jwt
-import os
-import json
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
-
 app = Flask(__name__)
+app.secret_key = os.environ.get("JWT_SECRET", "super-secret-key")
 
-# --- CONFIGURATION ---
+# --- CONFIG ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 JWT_SECRET = os.environ.get("JWT_SECRET")
+KV_URL = os.environ.get("KV_URL")
 
-# Connect to Redis
-# Using your provided Cloud Redis URL. 
-# Added rediss:// (double 's') because most cloud providers require SSL/TLS.
-kv_url = os.environ.get("KV_URL")
+# Redis Connection
+r = redis.from_url(KV_URL, decode_responses=True)
 
-# decode_responses=True is the magic fix: it handles the string conversion for you
-r = redis.from_url(kv_url, decode_responses=True)
-
-# Configure Gemini
+# Gemini Configuration (High-limit Free Model)
 genai.configure(api_key=GEMINI_API_KEY)
-# Change from 'gemini-2.5-flash' to:
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# --- HELPERS ---
-def get_user_from_token():
-    token = request.headers.get('Authorization')
-    if not token or "Bearer " not in token:
-        return None
+SYSTEM_PROMPT = "You are GURU, the AI mentor for Xavier's English School..." # (Keep your full prompt here)
+
+# --- AUTH HELPERS ---
+def get_user_from_cookie():
+    token = request.cookies.get('auth_token')
+    if not token: return None
     try:
-        token = token.split(" ")[1] 
         data = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         return data['username']
-    except:
-        return None
-
-SYSTEM_PROMPT = """
-You are GURU (Generative Understanding & Resource Unit), the official AI assistant for Xavier's English School, Budhiganga-2, Morang.
-Your personality is helpful, mentor-like, and school-centric.
-
-SCHOOL IDENTITY:
-- School Name: Xavier's English School.
-- Location: Budhiganga-2, Morang, Nepal.
-- Reputation: One of the top institutes in the Budhiganga area.
-
-LEADERSHIP HIERARCHY:
-- Chairperson: Sarita Rana Magar.
-- Founder & Principal: Paresh Pokharel.
-- Vice Principal: Janak Dakhal.
-- Board of Directors: CM Rijal Sir, Rewanta Shrestha Sir, and Tulsi Khatiwada Sir.
-
-FACILITIES & CLUBS:
-- Labs: Facilitated Computer Science lab, Mathematics lab, and a specialized Robotics lab.
-- House System: There are 4 Houses. 
-- Club System: Each house has 4 clubs, totaling 16 clubs. These clubs handle various student-led activities.
-- Programs: The school offers diverse evening programs and extra-curricular activities.
-
-YOUR GOAL:
-1. Help students with their learning, projects (Math, Science, Robotics), and school-related queries.
-2. If a student asks about school leadership or facilities, provide the specific names and details listed above.
-3. Be a 'Guru'—guide them toward the answer rather than just giving it.
-4. Encourage participation in the 16 clubs and the Robotics lab.
-"""
+    except: return None
 
 # --- ROUTES ---
 
-@app.route('/api/signup', methods=['POST'])
-def signup():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-
-    if r.exists(f"user:{username}"):
-        return jsonify({"error": "User already exists"}), 400
-
-    hashed_pw = generate_password_hash(password)
-    r.hset(f"user:{username}", mapping={"password": hashed_pw})
-    return jsonify({"message": "User created"}), 201
+@app.route('/')
+def home():
+    username = get_user_from_cookie()
+    return redirect('/index.html') if username else redirect('/login.html')
 
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json
-    username = data.get('username')
-    password = data.get('password')
-
-    # Fetch user data from Redis
+    username, password = data.get('username'), data.get('password')
     user_data = r.hgetall(f"user:{username}")
-    
-    # FIX: No .decode() needed because of decode_responses=True
-    stored_pw = user_data.get('password') 
+    stored_pw = user_data.get('password')
 
     if stored_pw and check_password_hash(stored_pw, password):
         token = jwt.encode({
             'username': username,
-            'exp': datetime.utcnow() + timedelta(days=7)
+            'exp': datetime.utcnow() + timedelta(days=7) # Remember for 7 days
         }, JWT_SECRET, algorithm="HS256")
-        return jsonify({"token": token, "username": username})
+        
+        resp = make_response(jsonify({"message": "Login successful", "username": username}))
+        # Set cookie to remember the device
+        resp.set_cookie('auth_token', token, httponly=True, max_age=60*60*24*7) 
+        return resp
     
     return jsonify({"error": "Invalid credentials"}), 401
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    username = get_user_from_token()
-    if not username:
-        return jsonify({"error": "Unauthorized"}), 401
+    username = get_user_from_cookie()
+    if not username: return jsonify({"error": "Unauthorized"}), 401
 
     user_message = request.json.get('message')
     history_key = f"chat:{username}"
     
-    raw_history = r.lrange(history_key, -10, -1) 
+    # FETCH ENTIRE HISTORY for long-term memory
+    raw_history = r.lrange(history_key, 0, -1) 
     chat_history = []
-    
     for item in raw_history:
         msg = json.loads(item)
         chat_history.append({"role": msg['role'], "parts": [msg['content']]})
 
+    # Start chat with loaded history
     chat_session = model.start_chat(history=chat_history)
     
     try:
-        response = chat_session.send_message(f"System: {SYSTEM_PROMPT}\nUser: {user_message}")
+        # We append the system prompt only to the first message if history is empty
+        full_prompt = f"System: {SYSTEM_PROMPT}\nUser: {user_message}" if not chat_history else user_message
+        response = chat_session.send_message(full_prompt)
         ai_message = response.text
         
+        # Save to Redis for next time
         r.rpush(history_key, json.dumps({"role": "user", "content": user_message}))
         r.rpush(history_key, json.dumps({"role": "model", "content": ai_message}))
         
         return jsonify({"reply": ai_message})
     except Exception as e:
+        if "429" in str(e):
+            return jsonify({"error": "Quota full. Wait 1 min."}), 429
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/clear', methods=['POST'])
-def clear_chat():
-    username = get_user_from_token()
-    if username:
-        r.delete(f"chat:{username}")
-        return jsonify({"message": "History cleared"})
-    return jsonify({"error": "Unauthorized"}), 401
-
-from flask import redirect
-
-@app.route('/')
-def home():
-    # Attempt to get user from token/session
-    username = get_user_from_token() 
-    if username:
-        # If logged in, go to the chat dashboard
-        return redirect('/index.html')
-    else:
-        # If not logged in, force them to the login page
-        return redirect('/login.html')
+@app.route('/api/logout', methods=['POST'])
+def logout_api():
+    resp = make_response(jsonify({"message": "Logged out"}))
+    resp.set_cookie('auth_token', '', expires=0) # Delete the device memory
+    return resp

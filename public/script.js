@@ -154,4 +154,12 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
         const icon = document.getElementById('dark-mode-icon');
         if (icon) icon.innerText = '☀️';
     }
+
+    // In your script.js fetch calls:
+const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: userMessage }),
+    credentials: 'include' // <--- ADD THIS LINE
+});
 }
