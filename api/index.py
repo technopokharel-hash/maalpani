@@ -26,7 +26,7 @@ r = redis.from_url(kv_url, decode_responses=True)
 
 # Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-3-pro-preview')
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 # --- HELPERS ---
 def get_user_from_token():
