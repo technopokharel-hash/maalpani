@@ -1,165 +1,133 @@
+// --- CONFIGURATION ---
 const API_URL = '/api';
 
-// --- UTILS ---
-function getToken() { return localStorage.getItem('token'); }
-function setToken(token) { localStorage.setItem('token', token); }
-function logout() { 
-    localStorage.removeItem('token'); 
-    localStorage.removeItem('display_name');
-    window.location.href = '/login.html'; 
-}
-
-// --- SIDEBAR & UI CONTROLS ---
-function toggleSidebar() {
-    const sb = document.getElementById('sidebar');
-    if (sb) {
-        sb.classList.toggle('w-0');
-        sb.classList.toggle('opacity-0');
-        sb.classList.toggle('-translate-x-full');
-    }
-}
-
-function toggleDarkMode() {
-    const html = document.documentElement;
-    const isDark = html.classList.toggle('dark');
-    const icon = document.getElementById('dark-mode-icon');
-    if (icon) icon.innerText = isDark ? '☀️' : '🌙';
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-}
-
-// --- AUTHENTICATION ---
+// --- AUTHENTICATION (Login/Signup) ---
 async function handleAuth(type, event) {
-    event.preventDefault();
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    const btn = event.target.querySelector('button');
-    const originalText = btn.innerText;
+    event.preventDefault(); // FIX: Stops the "?" question mark/page refresh bug
     
-    btn.innerText = "Verifying...";
-    btn.disabled = true;
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const submitBtn = document.getElementById(`${type}-btn`);
+
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value.trim();
+
+    if (!username || !password) return;
+
+    submitBtn.innerText = "Verifying...";
+    submitBtn.disabled = true;
 
     try {
         const res = await fetch(`${API_URL}/${type}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password }),
+            credentials: 'include' // Allows browser to save the login cookie
         });
         
         const data = await res.json();
         
         if (res.ok) {
+            localStorage.setItem('display_name', username);
             if (type === 'login') {
-                setToken(data.token);
-                localStorage.setItem('display_name', username);
                 window.location.href = '/index.html';
             } else {
-                alert('Account created! Welcome to Xavier\'s.');
+                alert('Account created! You can now log in.');
                 window.location.href = '/login.html';
             }
         } else {
             alert(data.error || "Authentication failed");
         }
     } catch (err) {
-        alert('Server connection error.');
+        alert('GURU Server Connection Error');
     } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
+        submitBtn.innerText = type === 'login' ? 'Log In' : 'Register';
+        submitBtn.disabled = false;
     }
 }
 
 // --- CHAT LOGIC ---
-if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
-    // Redirect if not logged in
-    if (!getToken()) window.location.href = '/login.html';
+async function sendMessage() {
+    const chatInput = document.getElementById('user-input'); // Changed to match your index.html
+    const chatBox = document.getElementById('chat-container');
+    const message = chatInput.value.trim();
+
+    if (!message) return;
+
+    chatInput.value = '';
+    appendMessage('user', message);
     
-    const chatBox = document.getElementById('chat-box');
-    const chatInput = document.getElementById('chat-input');
-    const userDisplayName = document.getElementById('user-display-name');
+    // Create GURU thinking bubble
+    const loadingDiv = appendMessage('model', 'GURU is thinking...');
+    loadingDiv.classList.add('animate-pulse', 'italic', 'text-gray-400');
 
-    // Set User Name in Sidebar
-    if (userDisplayName) {
-        userDisplayName.innerText = localStorage.getItem('display_name') || 'Student';
-    }
-
-    // Function to add a message bubble to the UI
-    function appendMessage(role, text) {
-        const div = document.createElement('div');
-        // Tailwind classes for message layout
-        div.className = `flex gap-4 ${role === 'user' ? 'flex-row-reverse' : ''}`;
+    try {
+        const res = await fetch(`${API_URL}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message }),
+            credentials: 'include' // Important for session history
+        });
         
-        const bgColor = role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-zinc-800 dark:text-gray-100';
-        const rounded = role === 'user' ? 'rounded-2xl rounded-tr-none' : 'rounded-2xl rounded-tl-none';
-        const icon = role === 'user' ? 'U' : 'G';
-        const iconColor = role === 'user' ? 'bg-gray-500' : 'bg-amber-500';
-
-        div.innerHTML = `
-            <div class="w-8 h-8 rounded-lg ${iconColor} flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-sm">${icon}</div>
-            <div class="${bgColor} ${rounded} p-4 max-w-[80%] shadow-sm text-sm transition-all animate-in fade-in slide-in-from-bottom-2">
-                ${text}
-            </div>
-        `;
+        const data = await res.json();
         
-        chatBox.appendChild(div);
-        chatBox.scrollTop = chatBox.scrollHeight;
-        return div.querySelector('div:last-child'); // Returns the bubble element
-    }
+        // Remove the pulse/thinking text once the reply is ready
+        loadingDiv.classList.remove('animate-pulse', 'italic', 'text-gray-400');
 
-    async function sendMessage() {
-        const message = chatInput.value.trim();
-        if (!message) return;
-
-        chatInput.value = '';
-        appendMessage('user', message);
-        
-        // Show Typing State
-        const loadingDiv = appendMessage('ai', 'GURU is thinking...');
-        loadingDiv.classList.add('animate-pulse', 'italic', 'text-gray-400');
-
-        try {
-            const res = await fetch(`${API_URL}/chat`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${getToken()}` 
-                },
-                body: JSON.stringify({ message })
-            });
-            
-            const data = await res.json();
-            loadingDiv.classList.remove('animate-pulse', 'italic', 'text-gray-400');
-
-            if (res.status === 429) {
-                loadingDiv.innerHTML = "⚠️ <b>Quota Exceeded:</b> GURU is getting too many questions right now! Please wait 60 seconds and try again.";
-                loadingDiv.classList.add('text-red-500', 'bg-red-50', 'dark:bg-red-900/20');
-            } else if (res.ok) {
-                loadingDiv.innerText = data.reply;
-            } else {
-                loadingDiv.innerText = "Error: " + (data.error || "Something went wrong.");
-            }
-        } catch (err) {
-            loadingDiv.classList.remove('animate-pulse');
-            loadingDiv.innerText = "Connection lost. Please check your network.";
+        if (res.status === 429) {
+            loadingDiv.innerHTML = "⚠️ <b>GURU is resting:</b> Daily limit reached. Try again in 60 seconds.";
+            loadingDiv.classList.add('text-amber-600');
+        } else if (res.ok) {
+            loadingDiv.innerText = data.reply;
+        } else {
+            if (res.status === 401) window.location.href = '/login.html';
+            loadingDiv.innerText = "Error: " + (data.error || "Something went wrong.");
         }
+    } catch (err) {
+        loadingDiv.innerText = "Connection lost. Please check your network.";
     }
-
-    // Event Listeners
-    document.getElementById('send-btn').addEventListener('click', sendMessage);
-    chatInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendMessage();
-    });
-
-    // Initialize Theme on Load
-    if (localStorage.getItem('theme') === 'dark') {
-        document.documentElement.classList.add('dark');
-        const icon = document.getElementById('dark-mode-icon');
-        if (icon) icon.innerText = '☀️';
-    }
-
-    // In your script.js fetch calls:
-const response = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: userMessage }),
-    credentials: 'include' // <--- ADD THIS LINE
-});
 }
+
+// --- MESSAGE RENDERING ---
+function appendMessage(role, text) {
+    const chatContainer = document.getElementById('chat-container');
+    const isAI = role === 'model';
+    
+    const div = document.createElement('div');
+    div.className = `flex gap-4 ${!isAI ? 'flex-row-reverse' : ''} mb-4`;
+    
+    div.innerHTML = `
+        <div class="w-8 h-8 rounded-lg ${isAI ? 'bg-blue-600' : 'bg-slate-500'} flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+            ${isAI ? 'G' : 'U'}
+        </div>
+        <div class="${isAI ? 'bg-white dark:bg-zinc-800 text-slate-800 dark:text-slate-100 rounded-tl-none border border-slate-100 dark:border-zinc-700' : 'bg-blue-600 text-white rounded-tr-none'} p-4 rounded-2xl max-w-[85%] shadow-sm text-sm transition-all">
+            ${text}
+        </div>
+    `;
+    
+    chatContainer.appendChild(div);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    return div.querySelector('div:last-child p') || div.querySelector('div:last-child');
+}
+
+// --- EVENT LISTENER INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Determine which page we are on and attach the correct listener
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    const chatForm = document.getElementById('chat-form');
+
+    if (loginForm) loginForm.addEventListener('submit', (e) => handleAuth('login', e));
+    if (signupForm) signupForm.addEventListener('submit', (e) => handleAuth('signup', e));
+    
+    if (chatForm) {
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            sendMessage();
+        });
+    }
+
+    // Load User Name
+    const display = document.getElementById('display-name');
+    if (display) display.innerText = localStorage.getItem('display_name') || 'Student';
+});

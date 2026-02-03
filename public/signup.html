@@ -3,20 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign Up</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Join GURU | Xavier's</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <div class="auth-container">
-        <div class="auth-box">
-            <h2>Create Account</h2>
-            <form onsubmit="handleAuth('signup', event)">
-                <input type="text" id="username" placeholder="Username" required>
-                <input type="password" id="password" placeholder="Password" required>
-                <button type="submit">Sign Up</button>
-            </form>
-            <p style="text-align:center; margin-top:10px; font-size:0.9rem;">
-                Already have an account? <a href="login.html">Log in</a>
+<body class="bg-slate-50 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border border-slate-100">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-black text-blue-600 tracking-tight">GURU</h1>
+            <p class="text-slate-500 text-sm mt-2 font-medium">Create Your Student Account</p>
+        </div>
+        
+        <form id="signup-form" class="space-y-5">
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Choose Username</label>
+                <input type="text" id="username" required class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-100 focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Create Password</label>
+                <input type="password" id="password" required class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-100 focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <button type="submit" id="signup-btn" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-[0.98]">
+                Register
+            </button>
+        </form>
+        
+        <div class="mt-8 pt-6 border-t border-slate-50 text-center">
+            <p class="text-sm text-slate-500">Already have an account? 
+                <a href="/login.html" class="text-blue-600 font-bold hover:underline">Login here</a>
             </p>
         </div>
     </div>

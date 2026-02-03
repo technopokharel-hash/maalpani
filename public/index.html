@@ -1,98 +1,82 @@
 <!DOCTYPE html>
-<html lang="en" class="light"> <head>
+<html lang="en" class="light">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GURU - Xavier's English School</title>
+    <title>GURU - Xavier's AI Mentor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        schoolBlue: '#1a73e8',
-                        guruGold: '#f9ab00',
-                    }
-                }
-            }
+        // Prevent theme flicker on load
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
         }
     </script>
+    <style>
+        /* Custom scrollbar for chat */
+        #chat-container::-webkit-scrollbar { width: 6px; }
+        #chat-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .dark #chat-container::-webkit-scrollbar-thumb { background: #475569; }
+    </style>
 </head>
-<body class="bg-gray-50 dark:bg-zinc-900 text-gray-900 dark:text-gray-100 h-screen overflow-hidden transition-colors duration-300">
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
 
-    <div class="flex h-full w-full">
-        <aside id="sidebar" class="w-72 bg-white dark:bg-zinc-800 border-r border-gray-200 dark:border-zinc-700 flex flex-col transition-all duration-300">
-            <div class="p-6 border-b border-gray-100 dark:border-zinc-700 flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full bg-schoolBlue text-white flex items-center justify-center font-bold text-xl">U</div>
-                <div>
-                    <p id="user-display-name" class="font-semibold text-sm">Student User</p>
-                    <button onclick="logout()" class="text-xs text-red-500 hover:underline">Logout</button>
-                </div>
+    <div class="flex h-screen overflow-hidden">
+        <aside class="hidden md:flex flex-col w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">X</div>
+                <h1 class="text-xl font-bold tracking-tight">GURU AI</h1>
             </div>
+            
+            <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+                <button onclick="clearChat()" class="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+                    <span>+ New Chat</span>
+                </button>
+            </nav>
 
-            <div class="flex-1 overflow-y-auto p-4 space-y-2" id="history-list">
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2">Recent Activity</p>
-                </div>
-
-            <div class="p-4">
-                <button onclick="toggleDarkMode()" class="w-full p-3 rounded-xl bg-gray-100 dark:bg-zinc-700 flex items-center justify-center gap-2 hover:bg-gray-200 dark:hover:bg-zinc-600 transition">
-                    <span id="dark-mode-icon">🌙</span> Dark Mode
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                <button id="theme-toggle" class="w-full flex items-center justify-between px-4 py-2 text-sm font-medium rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <span>Theme</span>
+                    <span id="theme-icon">🌙</span>
+                </button>
+                <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md">
+                    Logout
                 </button>
             </div>
         </aside>
 
-        <main class="flex-1 flex flex-col relative bg-white dark:bg-zinc-900">
-            <header class="p-4 border-b border-gray-100 dark:border-zinc-800 flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                    <button onclick="toggleSidebar()" class="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">☰</button>
-                    <div>
-                        <h1 class="text-xl font-bold text-schoolBlue">GURU</h1>
-                        <p class="text-[10px] text-gray-400">Xavier's English School Mentor</p>
-                    </div>
+        <main class="flex-1 flex flex-col h-full">
+            <header class="h-16 flex items-center justify-between px-6 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-gray-500">Mentoring</span>
+                    <span class="text-gray-300">/</span>
+                    <span class="text-sm font-semibold" id="display-name">Student</span>
                 </div>
             </header>
 
-            <div id="chat-box" class="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
-                <div class="flex gap-4">
-                    <div class="w-8 h-8 rounded-lg bg-guruGold flex-shrink-0 flex items-center justify-center text-white">G</div>
-                    <div class="bg-gray-100 dark:bg-zinc-800 p-4 rounded-2xl rounded-tl-none max-w-[80%]">
-                        Hello! I'm GURU. How can I help with your school projects today?
+            <div id="chat-container" class="flex-1 overflow-y-auto p-6 space-y-6">
+                <div class="flex gap-4 items-start">
+                    <div class="w-8 h-8 rounded bg-blue-600 flex-shrink-0 flex items-center justify-center text-white text-xs">G</div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 dark:border-gray-700 max-w-2xl">
+                        Hello! I am GURU. How can I assist your learning at Xavier's today?
                     </div>
                 </div>
             </div>
 
-            <div class="p-6 max-w-4xl mx-auto w-full">
-                <div class="relative flex items-center bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl p-2 shadow-sm">
-                    <button class="p-2 text-gray-400 hover:text-schoolBlue">📎</button>
-                    <input id="chat-input" type="text" placeholder="Ask Guru anything..." class="flex-1 bg-transparent border-none focus:ring-0 p-2 text-sm dark:text-white outline-none">
-                    <button id="send-btn" class="bg-schoolBlue text-white p-2 px-4 rounded-xl hover:opacity-90 transition">➔</button>
-                </div>
-                <p class="text-[10px] text-center text-gray-400 mt-3">GURU is an AI mentor. Please verify important school facts.</p>
+            <div class="p-6 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                <form id="chat-form" class="max-w-4xl mx-auto flex gap-4">
+                    <input type="text" id="user-input" placeholder="Ask GURU about robotics, math, or school..." 
+                        class="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition flex items-center gap-2">
+                        Send
+                    </button>
+                </form>
+                <p class="text-center text-[10px] text-gray-400 mt-3 uppercase tracking-widest">Official AI of Xavier's English School</p>
             </div>
         </main>
     </div>
 
     <script src="script.js"></script>
-    <script>
-        function toggleDarkMode() {
-            const html = document.documentElement;
-            const isDark = html.classList.toggle('dark');
-            document.getElementById('dark-mode-icon').innerText = isDark ? '☀️' : '🌙';
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-        }
-
-        // Initialize theme
-        if (localStorage.getItem('theme') === 'dark') {
-            document.documentElement.classList.add('dark');
-            document.getElementById('dark-mode-icon').innerText = '☀️';
-        }
-
-        function toggleSidebar() {
-            const sb = document.getElementById('sidebar');
-            sb.classList.toggle('w-0');
-            sb.classList.toggle('opacity-0');
-            sb.classList.toggle('-translate-x-full');
-        }
-    </script>
 </body>
 </html>
