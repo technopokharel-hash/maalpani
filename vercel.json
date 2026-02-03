@@ -2,7 +2,7 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.py" },
     { "source": "/", "destination": "/login.html" },
-    { "source": "/index", "destination": "/index.html" },
+    { "source": "/chat", "destination": "/index.html" },
     { "source": "/signup", "destination": "/signup.html" }
   ]
 }
