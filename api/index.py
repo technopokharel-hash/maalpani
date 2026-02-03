@@ -13,7 +13,7 @@ load_dotenv()
 app = Flask(__name__)
 
 # --- CONFIGURATION ---
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_API_KEY = os.environ.get("AIzaSyC_OT3WQyz-yRhTHrIXGYoCrplfvapwFyQ")
 JWT_SECRET = os.environ.get("JWT_SECRET")
 
 # Connect to Redis
