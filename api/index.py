@@ -114,3 +114,7 @@ def clear_chat():
         r.delete(f"chat:{username}")
         return jsonify({"message": "History cleared"})
     return jsonify({"error": "Unauthorized"}), 401
+
+@app.route('/')
+def home():
+    return "Backend is running! Visit /login.html to start."
