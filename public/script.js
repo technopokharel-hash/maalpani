@@ -5,6 +5,12 @@ function getToken() { return localStorage.getItem('token'); }
 function setToken(token) { localStorage.setItem('token', token); }
 function logout() { localStorage.removeItem('token'); window.location.href = '/login.html'; }
 
+// --- SIDEBAR TOGGLE (New Change) ---
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) sidebar.classList.toggle('collapsed');
+}
+
 // --- AUTH ---
 async function handleAuth(type, event) {
     event.preventDefault();
@@ -28,6 +34,8 @@ async function handleAuth(type, event) {
         if (res.ok) {
             if (type === 'login') {
                 setToken(data.token);
+                // Store username for the sidebar display
+                localStorage.setItem('display_name', username);
                 window.location.href = '/index.html';
             } else {
                 alert('Account created! Please login.');
@@ -48,23 +56,28 @@ async function handleAuth(type, event) {
 if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
     if (!getToken()) window.location.href = '/login.html';
     
-    const chatContainer = document.getElementById('chat-container');
+    // Updated IDs to match new GURU HTML
+    const chatContainer = document.getElementById('chat-box');
     const chatInput = document.getElementById('chat-input');
+    const userDisplayName = document.getElementById('user-display-name');
+
+    // Show the logged-in user's name in sidebar
+    if (userDisplayName) {
+        userDisplayName.innerText = localStorage.getItem('display_name') || 'Student User';
+    }
 
     function appendMessage(role, text) {
         const div = document.createElement('div');
-        div.className = `message-row ${role === 'user' ? 'user' : 'ai'}`;
+        // Updated classes to match the new school-themed CSS
+        div.className = `message ${role === 'user' ? 'user' : 'ai'}`;
         div.innerHTML = `
-            <div class="message-content">
-                <div class="avatar ${role === 'user' ? 'user-avatar' : 'ai-avatar'}">
-                    ${role === 'user' ? '👤' : '🤖'}
-                </div>
-                <div class="text">${text}</div>
+            <div class="bubble">
+                ${text}
             </div>
         `;
         chatContainer.appendChild(div);
         chatContainer.scrollTop = chatContainer.scrollHeight;
-        return div.querySelector('.text');
+        return div.querySelector('.bubble');
     }
 
     async function sendMessage() {
@@ -74,7 +87,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
         chatInput.value = '';
         appendMessage('user', message);
         
-        const loadingDiv = appendMessage('ai', 'Thinking...');
+        const loadingDiv = appendMessage('ai', 'GURU is thinking...');
         loadingDiv.classList.add('typing');
 
         try {
@@ -90,7 +103,8 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
             
             loadingDiv.classList.remove('typing');
             if (res.ok) {
-                loadingDiv.innerText = data.reply; // Using innerText handles basic formatting safer
+                // Use innerText to keep it clean, or innerHTML if you want Gemini's Markdown
+                loadingDiv.innerText = data.reply; 
             } else {
                 loadingDiv.innerText = "Error: " + data.error;
             }

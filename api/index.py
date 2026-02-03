@@ -141,9 +141,15 @@ def clear_chat():
         return jsonify({"message": "History cleared"})
     return jsonify({"error": "Unauthorized"}), 401
 
+from flask import redirect
+
 @app.route('/')
 def home():
-    # Check if 'username' exists in the session
-    if 'username' in session or get_user_from_token():
-        return redirect('/index.html') # The Chat Dashboard
-    return redirect('/login.html') # Force Login
+    # Attempt to get user from token/session
+    username = get_user_from_token() 
+    if username:
+        # If logged in, go to the chat dashboard
+        return redirect('/index.html')
+    else:
+        # If not logged in, force them to the login page
+        return redirect('/login.html')
