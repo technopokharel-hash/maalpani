@@ -1,4 +1,20 @@
 :root {
+    --school-blue: #1a73e8; /* Classic educational blue */
+    --guru-gold: #f9ab00;   /* To represent 'Guru' wisdom */
+}
+
+.app-header h1 {
+    color: var(--school-blue);
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+.ai-bubble {
+    border-left: 4px solid var(--guru-gold); /* A gold accent for GURU's responses */
+    background-color: #fffdf7;
+}
+
+:root {
     --bg-color: #343541;
     --chat-bg: #444654;
     --input-bg: #40414f;
