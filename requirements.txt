@@ -1,5 +1,5 @@
 Flask
-google-generativeai
+google-generativeai>=0.7.2
 redis
 werkzeug
 pyjwt

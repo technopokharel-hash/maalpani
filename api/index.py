@@ -19,14 +19,14 @@ JWT_SECRET = os.environ.get("JWT_SECRET")
 # Connect to Redis
 # Using your provided Cloud Redis URL. 
 # Added rediss:// (double 's') because most cloud providers require SSL/TLS.
-kv_url = os.environ.get("KV_URL", "rediss://default:EDaOZaJ5tZ03vFs3fwZUwBjQGXHTP230@redis-19024.c239.us-east-1-2.ec2.cloud.redislabs.com:19024")
+kv_url = os.environ.get("KV_URL")
 
 # decode_responses=True is the magic fix: it handles the string conversion for you
 r = redis.from_url(kv_url, decode_responses=True)
 
 # Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 # --- HELPERS ---
 def get_user_from_token():
