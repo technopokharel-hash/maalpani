@@ -21,7 +21,7 @@ JWT_SECRET = os.environ.get("JWT_SECRET")
 
 # Connect to Redis
 # If KV_URL is set (Vercel), use it. Otherwise default to local.
-kv_url = os.environ.get("KV_URL", "redis://localhost:6379")
+kv_url = os.environ.get("KV_URL", "redis://default:EDaOZaJ5tZ03vFs3fwZUwBjQGXHTP230@redis-19024.c239.us-east-1-2.ec2.cloud.redislabs.com:19024")
 kv_token = os.environ.get("KV_REST_API_TOKEN")
 
 # Logic to handle Vercel KV (REST) vs Standard Redis (Local)
