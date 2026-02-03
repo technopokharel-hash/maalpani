@@ -20,7 +20,7 @@ r = redis.from_url(KV_URL, decode_responses=True)
 
 # Gemini Configuration (High-limit Free Model)
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('Gemini 2.5 Flash-Lite')
 
 SYSTEM_PROMPT = "You are GURU, the AI mentor for Xavier's English School..." # (Keep your full prompt here)
 
