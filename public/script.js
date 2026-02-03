@@ -67,18 +67,26 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
     }
 
     function appendMessage(role, text) {
-        const div = document.createElement('div');
-        // Updated classes to match the new school-themed CSS
-        div.className = `message ${role === 'user' ? 'user' : 'ai'}`;
-        div.innerHTML = `
-            <div class="bubble">
-                ${text}
-            </div>
-        `;
-        chatContainer.appendChild(div);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-        return div.querySelector('.bubble');
-    }
+    const chatBox = document.getElementById('chat-box');
+    const div = document.createElement('div');
+    div.className = `flex gap-4 ${role === 'user' ? 'flex-row-reverse' : ''}`;
+    
+    const bgColor = role === 'user' ? 'bg-schoolBlue text-white' : 'bg-gray-100 dark:bg-zinc-800 dark:text-gray-100';
+    const rounded = role === 'user' ? 'rounded-2xl rounded-tr-none' : 'rounded-2xl rounded-tl-none';
+    const icon = role === 'user' ? 'U' : 'G';
+    const iconBg = role === 'user' ? 'bg-gray-400' : 'bg-guruGold';
+
+    div.innerHTML = `
+        <div class="w-8 h-8 rounded-lg ${iconBg} flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">${icon}</div>
+        <div class="${bgColor} ${rounded} p-4 max-w-[80%] shadow-sm text-sm">
+            ${text}
+        </div>
+    `;
+    
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return div.querySelector('div:last-child');
+}
 
     async function sendMessage() {
         const message = chatInput.value.trim();

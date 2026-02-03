@@ -1,67 +1,98 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
+<html lang="en" class="light"> <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GURU - Xavier's English School</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        schoolBlue: '#1a73e8',
+                        guruGold: '#f9ab00',
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
-    <div class="app-container">
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-top">
-                <div class="profile-section">
-                    <div class="avatar">U</div>
-                    <span id="user-display-name">Student User</span>
-                </div>
-                <button class="new-chat-btn" onclick="window.location.reload()">+ New Chat</button>
-            </div>
-            
-            <nav class="chat-history">
-                <p class="history-label">Recent Activity</p>
-                <div id="history-list">
-                    <button class="history-item">✨ Robotics Project Ideas</button>
-                    <button class="history-item">✨ Math Lab Help</button>
-                </div>
-            </nav>
+<body class="bg-gray-50 dark:bg-zinc-900 text-gray-900 dark:text-gray-100 h-screen overflow-hidden transition-colors duration-300">
 
-            <div class="sidebar-bottom">
-                <button class="logout-btn" onclick="logout()">Logout</button>
+    <div class="flex h-full w-full">
+        <aside id="sidebar" class="w-72 bg-white dark:bg-zinc-800 border-r border-gray-200 dark:border-zinc-700 flex flex-col transition-all duration-300">
+            <div class="p-6 border-b border-gray-100 dark:border-zinc-700 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-schoolBlue text-white flex items-center justify-center font-bold text-xl">U</div>
+                <div>
+                    <p id="user-display-name" class="font-semibold text-sm">Student User</p>
+                    <button onclick="logout()" class="text-xs text-red-500 hover:underline">Logout</button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 space-y-2" id="history-list">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2">Recent Activity</p>
+                </div>
+
+            <div class="p-4">
+                <button onclick="toggleDarkMode()" class="w-full p-3 rounded-xl bg-gray-100 dark:bg-zinc-700 flex items-center justify-center gap-2 hover:bg-gray-200 dark:hover:bg-zinc-600 transition">
+                    <span id="dark-mode-icon">🌙</span> Dark Mode
+                </button>
             </div>
         </aside>
 
-        <main class="chat-area">
-            <header class="main-header">
-                <div class="header-left">
-                    <button class="menu-btn" onclick="toggleSidebar()">☰</button>
-                    <div class="logo-text">
-                        <h1>GURU</h1>
-                        <span>Xavier's English School</span>
+        <main class="flex-1 flex flex-col relative bg-white dark:bg-zinc-900">
+            <header class="p-4 border-b border-gray-100 dark:border-zinc-800 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <button onclick="toggleSidebar()" class="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">☰</button>
+                    <div>
+                        <h1 class="text-xl font-bold text-schoolBlue">GURU</h1>
+                        <p class="text-[10px] text-gray-400">Xavier's English School Mentor</p>
                     </div>
                 </div>
             </header>
 
-            <div id="chat-container">
-                <div class="message ai">
-                    <div class="bubble">
-                        Hello! I'm <b>GURU</b>, your digital mentor. How is your project going at Xavier's today?
+            <div id="chat-box" class="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
+                <div class="flex gap-4">
+                    <div class="w-8 h-8 rounded-lg bg-guruGold flex-shrink-0 flex items-center justify-center text-white">G</div>
+                    <div class="bg-gray-100 dark:bg-zinc-800 p-4 rounded-2xl rounded-tl-none max-w-[80%]">
+                        Hello! I'm GURU. How can I help with your school projects today?
                     </div>
                 </div>
             </div>
-            
-            <div class="input-section">
-                <div class="input-wrapper">
-                    <label for="image-upload" class="icon-btn">
-                        📎 <input type="file" id="image-upload" accept="image/*" hidden>
-                    </label>
-                    <input type="text" id="chat-input" placeholder="Ask Guru anything...">
-                    <button id="send-btn">➔</button>
+
+            <div class="p-6 max-w-4xl mx-auto w-full">
+                <div class="relative flex items-center bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-2xl p-2 shadow-sm">
+                    <button class="p-2 text-gray-400 hover:text-schoolBlue">📎</button>
+                    <input id="chat-input" type="text" placeholder="Ask Guru anything..." class="flex-1 bg-transparent border-none focus:ring-0 p-2 text-sm dark:text-white outline-none">
+                    <button id="send-btn" class="bg-schoolBlue text-white p-2 px-4 rounded-xl hover:opacity-90 transition">➔</button>
                 </div>
-                <p class="disclaimer">GURU may provide inaccurate info. Verify important facts.</p>
+                <p class="text-[10px] text-center text-gray-400 mt-3">GURU is an AI mentor. Please verify important school facts.</p>
             </div>
         </main>
     </div>
+
     <script src="script.js"></script>
+    <script>
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            const isDark = html.classList.toggle('dark');
+            document.getElementById('dark-mode-icon').innerText = isDark ? '☀️' : '🌙';
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        }
+
+        // Initialize theme
+        if (localStorage.getItem('theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.getElementById('dark-mode-icon').innerText = '☀️';
+        }
+
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar');
+            sb.classList.toggle('w-0');
+            sb.classList.toggle('opacity-0');
+            sb.classList.toggle('-translate-x-full');
+        }
+    </script>
 </body>
 </html>
