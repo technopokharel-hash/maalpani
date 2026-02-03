@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="header-bar">
+        <h3>AI Assistant</h3>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+    <div id="chat-container">
+        <div class="message-row ai">
+            <div class="message-content">
+                <div class="avatar ai-avatar">🤖</div>
+                <div class="text">Hello! I'm your AI assistant. How can I help you today?</div>
+            </div>
+        </div>
+    </div>
+    <div class="input-area">
+        <div class="input-wrapper">
+            <input type="text" id="chat-input" placeholder="Send a message...">
+            <button id="send-btn">Send</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
