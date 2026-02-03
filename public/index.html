@@ -29,6 +29,37 @@
             <button id="send-btn">Send</button>
         </div>
     </div>
+    <div class="app-container">
+    <aside class="sidebar" id="sidebar">
+        <div class="profile-section">
+            <img src="user-icon.png" alt="Profile">
+            <span id="user-display-name">Student User</span>
+        </div>
+        
+        <nav class="chat-history">
+            <button class="history-item">Recent Chat 1</button>
+            <button class="history-item">Recent Chat 2</button>
+        </nav>
+
+        <button class="new-chat-btn">+ New Chat</button>
+    </aside>
+
+    <main class="chat-area">
+        <header>
+            <button onclick="toggleSidebar()">☰</button>
+            <h2>GURU AI</h2>
+        </header>
+        <div id="chat-box"></div>
+        
+        <div class="input-container">
+            <label for="image-upload" class="attachment-btn">
+                📎 <input type="file" id="image-upload" accept="image/*" hidden>
+            </label>
+            <input type="text" id="user-input" placeholder="Ask Guru anything...">
+            <button id="send-btn">➔</button>
+        </div>
+    </main>
+</div>
     <script src="script.js"></script>
 </body>
 </html>

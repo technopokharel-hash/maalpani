@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, redirect, request, jsonify, session
 import google.generativeai as genai
 import redis
 import jwt
@@ -143,4 +143,7 @@ def clear_chat():
 
 @app.route('/')
 def home():
-    return "Backend is running! Visit /login.html to start."
+    # Check if 'username' exists in the session
+    if 'username' in session or get_user_from_token():
+        return redirect('/index.html') # The Chat Dashboard
+    return redirect('/login.html') # Force Login
