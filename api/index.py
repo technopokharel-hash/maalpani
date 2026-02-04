@@ -6,6 +6,7 @@ import redis
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from .school_data import get_guru_prompt # The '.' is important for Vercel
 
 # 1. INITIALIZE & CONFIG
 load_dotenv()
@@ -27,13 +28,13 @@ genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(MODEL_NAME)
 
 # 2. GURU PERSONALITY PROMPT
-SYSTEM_PROMPT = """
-You are GURU (Generative Understanding & Resource Unit), the official AI mentor for Xavier's English School, Budhiganga-2, Morang.
-Principal: Paresh Pokharel | Vice Principal: Janak Dakhal.
-Chairperson: Sarita Rana Magar.
-Features: Computer Lab, Math Lab, Robotics Lab, 4 Houses, 16 Clubs.
-Goal: Be helpful, encourage robotics and learning, and never give direct answers—guide students to think!
-"""
+# Replace your old SYSTEM_PROMPT with this:
+SYSTEM_PROMPT = get_guru_prompt()
+
+model = genai.GenerativeModel(
+    model_name='gemini-2.5-flash-lite',
+    system_instruction=SYSTEM_PROMPT
+)
 
 # 3. AUTHENTICATION HELPERS
 def get_user_from_cookie():

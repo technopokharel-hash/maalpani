@@ -131,3 +131,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const display = document.getElementById('display-name');
     if (display) display.innerText = localStorage.getItem('display_name') || 'Student';
 });
+
+function formatText(text) {
+    // Simple logic to convert **text** to <b>text</b> and new lines to <br>
+    return text
+        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') 
+        .replace(/\n/g, '<br>');
+}
+
+// Then in your appendMessage use:
+// div.innerHTML = `... <p>${formatText(text)}</p> ...`;
