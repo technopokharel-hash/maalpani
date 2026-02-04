@@ -5,7 +5,7 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
-# Path fix for Vercel
+# --- VERCEL PATH FIX ---
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 try:
     from school_data import get_guru_prompt
@@ -16,11 +16,11 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-# Configuration
+# Config from Environment Variables
 JWT_SECRET = os.environ.get("JWT_SECRET", "xavier_2026_key")
 MODEL_NAME = "gpt-4o-mini"
 
-# --- LAZY SERVICES (Prevents Startup Crashes) ---
+# --- LAZY SERVICES ---
 _openai_client = None
 _redis_client = None
 
@@ -38,63 +38,50 @@ def get_redis():
         _redis_client = redis.from_url(os.environ.get("KV_URL"), decode_responses=True)
     return _redis_client
 
-# --- AUTH HELPERS ---
-def get_user():
-    token = request.cookies.get('token')
-    if not token: return None
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])['username']
-    except: return None
-
 # --- ROUTES ---
-
-@app.route('/api/ping', methods=['GET'])
-def ping():
-    return jsonify({"status": "ready", "service": "GURU-OpenAI"}), 200
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    username = get_user()
-    if not username: return jsonify({"error": "Unauthorized"}), 401
-    
-    user_input = request.json.get('message')
-    if not user_input: return jsonify({"error": "Empty message"}), 400
+    # 1. Check Auth
+    token = request.cookies.get('token')
+    if not token: return jsonify({"error": "Unauthorized"}), 401
+    try:
+        username = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])['username']
+    except: return jsonify({"error": "Session expired"}), 401
 
+    # 2. Get AI & DB
     try:
         ai = get_openai()
         r = get_redis()
+        user_input = request.json.get('message')
         history_key = f"chat:{username}"
         
-        # Build prompt
+        # Build prompt + last 5 messages
         messages = [{"role": "system", "content": get_guru_prompt()}]
-        
-        # Add history
         try:
-            history = r.lrange(history_key, -6, -1)
+            history = r.lrange(history_key, -5, -1)
             for m in history:
-                msg_data = json.loads(m)
-                messages.append({"role": msg_data['role'], "content": msg_data['content']})
+                d = json.loads(m)
+                messages.append({"role": d['role'], "content": d['content']})
         except: pass
 
         messages.append({"role": "user", "content": user_input})
 
-        # OpenAI API Call
+        # OpenAI Call
         response = ai.chat.completions.create(
             model=MODEL_NAME,
-            messages=messages,
-            temperature=0.7
+            messages=messages
         )
-        
         reply = response.choices[0].message.content
 
-        # Save to Redis
+        # Save History
         r.rpush(history_key, json.dumps({"role": "user", "content": user_input}))
         r.rpush(history_key, json.dumps({"role": "assistant", "content": reply}))
-        r.ltrim(history_key, -20, -1) 
+        r.ltrim(history_key, -20, -1)
 
         return jsonify({"reply": reply})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Add your Signup/Login logic here using 'get_redis()' for the 'r' client
+# Entry point for Vercel
 handler = app
