@@ -3,9 +3,15 @@ from flask import Flask, redirect, request, jsonify, make_response
 from flask_cors import CORS
 import google.generativeai as genai
 import redis
+import sys
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+
+# This forces Vercel to find your installed libraries correctly
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from flask import Flask # ... rest of your imports
 
 # 1. INITIALIZE & CONFIG
 load_dotenv()
@@ -125,3 +131,6 @@ def logout():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+    # Vercel looks for 'app' or 'handler'
+handler = app
