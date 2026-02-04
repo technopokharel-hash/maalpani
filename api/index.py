@@ -85,3 +85,9 @@ def chat():
 
 # Entry point for Vercel
 handler = app
+
+@app.route('/api/debug-check')
+def debug_check():
+    # Only shows the length for security, not the actual secret
+    secret = os.environ.get("JWT_SECRET")
+    return f"Secret found! Length: {len(secret) if secret else 'Zero'}"
