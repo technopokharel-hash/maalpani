@@ -1,97 +1,208 @@
-import os, json, jwt
-from flask import Flask, redirect, request, jsonify, make_response
-from flask_cors import CORS
-from openai import OpenAI  # Standard for Groq compatibility
-import redis
-from werkzeug.security import generate_password_hash, check_password_hash
+import os
+import json
+import sys
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
-from .school_data import get_guru_prompt
 
-# 1. INITIALIZE & CONFIG
-load_dotenv()
+from flask import Flask, request, jsonify, make_response
+from flask_cors import CORS
+
+# Third-party imports are wrapped so Vercel doesn't crash at import-time.
+try:
+    import jwt  # pyjwt
+except Exception:  # pragma: no cover
+    jwt = None
+
+try:
+    import redis
+except Exception:  # pragma: no cover
+    redis = None
+
+try:
+    from openai import OpenAI
+except Exception:  # pragma: no cover
+    OpenAI = None
+
+try:
+    from werkzeug.security import generate_password_hash, check_password_hash
+except Exception:  # pragma: no cover
+    generate_password_hash = None
+    check_password_hash = None
+
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover
+    load_dotenv = None
+
+# 1. ROBUST PATH FIX (Prevents crashes from missing local modules)
+# This adds the current directory to sys.path so 'school_data' can always be found.
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.append(CURRENT_DIR)
+
+try:
+    from school_data import get_guru_prompt
+except ImportError:
+    # Fallback for different Vercel directory structures
+    from .school_data import get_guru_prompt
+
+# 2. INITIALIZE & CONFIG
+if load_dotenv:
+    load_dotenv()
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-# MODEL SETTINGS
-# llama-3.3-70b-versatile is the high-quality model (1,000 requests/day)
-MODEL_NAME = 'llama-3.3-70b-versatile' 
+MODEL_NAME = 'llama-3.3-70b-versatile'
 
-# 2. GROQ CLIENT SETUP
-client = OpenAI(
-    base_url="https://api.groq.com/openai/v1",
-    api_key=os.environ.get("GROQ_API_KEY")
-)
+# Ensure the client only initializes if the API key exists
+GROQ_KEY = os.environ.get("GROQ_API_KEY")
+client = None
+if GROQ_KEY and OpenAI:
+    try:
+        client = OpenAI(
+            base_url="https://api.groq.com/openai/v1",
+            api_key=GROQ_KEY,
+        )
+    except Exception:
+        # Avoid import-time crash if OpenAI client init fails in serverless
+        client = None
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "xavier_guru_2026_secret")
 KV_URL = os.environ.get("KV_URL")
-r = redis.from_url(KV_URL, decode_responses=True)
+try:
+    r = redis.from_url(KV_URL, decode_responses=True) if (KV_URL and redis) else None
+except Exception:
+    # Avoid hard crash on cold start if Redis is misconfigured
+    r = None
 
-# 3. AUTHENTICATION HELPERS
+def error_response(message, status=400):
+    return jsonify({"error": message}), status
+
+def is_prod():
+    return os.environ.get("VERCEL", "").lower() == "1" or os.environ.get("ENV", "").lower() == "production"
+
 def get_user_from_cookie():
-    token = request.cookies.get('auth_token')
-    if not token: return None
+    token = request.cookies.get("token")
+    if not token:
+        return None
+    if jwt is None:
+        return None
     try:
-        data = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        return data['username']
-    except: return None
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return payload.get("username")
+    except Exception:
+        return None
 
-# 4. PRIMARY ROUTES
-@app.route('/')
-def home():
-    username = get_user_from_cookie()
-    return redirect('/index.html') if username else redirect('/login.html')
+def issue_token(username):
+    if jwt is None:
+        raise RuntimeError("pyjwt is not installed on the server")
+    exp = datetime.utcnow() + timedelta(days=7)
+    return jwt.encode({"username": username, "exp": exp}, JWT_SECRET, algorithm="HS256")
+
+def set_auth_cookie(resp, token):
+    resp.set_cookie(
+        "token",
+        token,
+        httponly=True,
+        secure=is_prod(),
+        samesite="Lax",
+        max_age=7 * 24 * 60 * 60,
+        path="/"
+    )
+    return resp
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    return jsonify({
+        "status": "ok",
+        "has_groq_key": bool(GROQ_KEY),
+        "redis_connected": r is not None
+    })
 
 @app.route('/api/signup', methods=['POST'])
 def signup():
-    data = request.json
-    username, password = data.get('username'), data.get('password')
-    if r.exists(f"user:{username}"):
-        return jsonify({"error": "Username taken"}), 400
-    
-    hashed_pw = generate_password_hash(password)
-    r.hset(f"user:{username}", mapping={"password": hashed_pw})
-    return jsonify({"message": "Signup successful"}), 201
+    if generate_password_hash is None:
+        return error_response("Server misconfigured: werkzeug is missing", 500)
+    if r is None:
+        return error_response("Storage unavailable: KV_URL not configured", 500)
+
+    data = request.get_json(force=True) or {}
+    username = (data.get('username') or "").strip().lower()
+    password = (data.get('password') or "").strip()
+
+    if not username or not password:
+        return error_response("Username and password are required", 400)
+
+    if r.hexists("users", username):
+        return error_response("User already exists", 409)
+
+    r.hset("users", username, generate_password_hash(password))
+    return jsonify({"message": "Account created"})
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.json
-    username, password = data.get('username'), data.get('password')
-    user_data = r.hgetall(f"user:{username}")
-    stored_pw = user_data.get('password')
+    if check_password_hash is None:
+        return error_response("Server misconfigured: werkzeug is missing", 500)
+    if jwt is None:
+        return error_response("Server misconfigured: pyjwt is missing", 500)
+    if r is None:
+        return error_response("Storage unavailable: KV_URL not configured", 500)
 
-    if stored_pw and check_password_hash(stored_pw, password):
-        token = jwt.encode({
-            'username': username,
-            'exp': datetime.utcnow() + timedelta(days=7)
-        }, JWT_SECRET, algorithm="HS256")
-        
-        resp = make_response(jsonify({"username": username, "redirect": "/index.html"}))
-        resp.set_cookie('auth_token', token, httponly=True, samesite='Lax', max_age=60*60*24*7)
-        return resp
-    
-    return jsonify({"error": "Invalid username or password"}), 401
+    data = request.get_json(force=True) or {}
+    username = (data.get('username') or "").strip().lower()
+    password = (data.get('password') or "").strip()
+
+    if not username or not password:
+        return error_response("Username and password are required", 400)
+
+    stored_hash = r.hget("users", username)
+    if not stored_hash or not check_password_hash(stored_hash, password):
+        return error_response("Invalid credentials", 401)
+
+    token = issue_token(username)
+    resp = make_response(jsonify({"message": "Logged in"}))
+    return set_auth_cookie(resp, token)
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    resp = make_response(jsonify({"message": "Logged out"}))
+    resp.delete_cookie("token", path="/")
+    return resp
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    username = get_user_from_cookie()
-    if not username: return jsonify({"error": "Unauthorized"}), 401
+    if not GROQ_KEY:
+        return error_response("Missing GROQ_API_KEY configuration", 500)
+    if OpenAI is None:
+        return error_response("Server misconfigured: openai package missing", 500)
+    if client is None:
+        return error_response("AI client failed to initialize (check GROQ_API_KEY)", 500)
 
-    user_message = request.json.get('message')
+    if r is None:
+        return error_response("Storage unavailable: KV_URL not configured", 500)
+
+    username = get_user_from_cookie()
+    if not username:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    user_message = (request.json or {}).get('message')
+    if not user_message:
+        return error_response("Message is required", 400)
+
     history_key = f"chat:{username}"
     
     # SYSTEM PROMPT
     messages = [{"role": "system", "content": get_guru_prompt()}]
     
-    # FETCH HISTORY (Last 10 messages)
-    raw_history = r.lrange(history_key, -10, -1) 
-    for item in raw_history:
-        msg = json.loads(item)
-        # Groq uses 'assistant' instead of 'model'
-        role = "assistant" if msg['role'] == "model" else "user"
-        messages.append({"role": role, "content": msg['content']})
+    # FETCH HISTORY (Wrapped in try/except to prevent crash if Redis lags)
+    try:
+        raw_history = r.lrange(history_key, -10, -1) 
+        for item in raw_history:
+            msg = json.loads(item)
+            role = "assistant" if msg['role'] == "model" else "user"
+            messages.append({"role": role, "content": msg['content']})
+    except Exception:
+        pass # Continue without history if Redis fails
 
-    # ADD CURRENT MESSAGE
     messages.append({"role": "user", "content": user_message})
 
     try:
@@ -111,15 +222,10 @@ def chat():
         return jsonify({"reply": ai_reply})
 
     except Exception as e:
-        if "429" in str(e):
-            return jsonify({"error": "GURU is busy. Try again in 60 seconds."}), 429
+        # Returns exact error to frontend for easier debugging
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/logout', methods=['POST'])
-def logout():
-    resp = make_response(jsonify({"message": "Logged out"}))
-    resp.set_cookie('auth_token', '', expires=0)
-    return resp
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# Vercel Python runtime sometimes looks for a WSGI callable named `handler`.
+# Exporting it explicitly makes deployments more reliable.
+handler = app
