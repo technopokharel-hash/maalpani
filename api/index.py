@@ -1,44 +1,34 @@
 import os, json, jwt
 from flask import Flask, redirect, request, jsonify, make_response
 from flask_cors import CORS
-import google.generativeai as genai
+from openai import OpenAI  # Standard for Groq compatibility
 import redis
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from .school_data import get_guru_prompt # The '.' is important for Vercel
+from .school_data import get_guru_prompt
 
 # 1. INITIALIZE & CONFIG
 load_dotenv()
 app = Flask(__name__)
-# Enable CORS so your frontend can send cookies safely
 CORS(app, supports_credentials=True)
 
-# Using Gemini 2.5 Flash-Lite: Stable, Fast, 1000 RPD
-MODEL_NAME = 'gemini-2.5-flash-lite' 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+# MODEL SETTINGS
+# llama-3.3-70b-versatile is the high-quality model (1,000 requests/day)
+MODEL_NAME = 'llama-3.3-70b-versatile' 
+
+# 2. GROQ CLIENT SETUP
+client = OpenAI(
+    base_url="https://api.groq.com/openai/v1",
+    api_key=os.environ.get("GROQ_API_KEY")
+)
+
 JWT_SECRET = os.environ.get("JWT_SECRET", "xavier_guru_2026_secret")
 KV_URL = os.environ.get("KV_URL")
-
-# Connect to Redis with string decoding enabled
 r = redis.from_url(KV_URL, decode_responses=True)
-
-# Configure Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(MODEL_NAME)
-
-# 2. GURU PERSONALITY PROMPT
-# Replace your old SYSTEM_PROMPT with this:
-SYSTEM_PROMPT = get_guru_prompt()
-
-model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash-lite',
-    system_instruction=SYSTEM_PROMPT
-)
 
 # 3. AUTHENTICATION HELPERS
 def get_user_from_cookie():
-    """Checks if the user has a valid login session on this device."""
     token = request.cookies.get('auth_token')
     if not token: return None
     try:
@@ -49,7 +39,6 @@ def get_user_from_cookie():
 # 4. PRIMARY ROUTES
 @app.route('/')
 def home():
-    """Redirects to chat if logged in, otherwise to login page."""
     username = get_user_from_cookie()
     return redirect('/index.html') if username else redirect('/login.html')
 
@@ -74,11 +63,10 @@ def login():
     if stored_pw and check_password_hash(stored_pw, password):
         token = jwt.encode({
             'username': username,
-            'exp': datetime.utcnow() + timedelta(days=7) # Remember for 7 days
+            'exp': datetime.utcnow() + timedelta(days=7)
         }, JWT_SECRET, algorithm="HS256")
         
         resp = make_response(jsonify({"username": username, "redirect": "/index.html"}))
-        # Secure Cookie to remember the user on this device
         resp.set_cookie('auth_token', token, httponly=True, samesite='Lax', max_age=60*60*24*7)
         return resp
     
@@ -92,36 +80,45 @@ def chat():
     user_message = request.json.get('message')
     history_key = f"chat:{username}"
     
-    # LONG-TERM MEMORY: Fetch the last 20 messages from Redis
-    raw_history = r.lrange(history_key, -20, -1) 
-    chat_history = []
+    # SYSTEM PROMPT
+    messages = [{"role": "system", "content": get_guru_prompt()}]
+    
+    # FETCH HISTORY (Last 10 messages)
+    raw_history = r.lrange(history_key, -10, -1) 
     for item in raw_history:
         msg = json.loads(item)
-        chat_history.append({"role": msg['role'], "parts": [msg['content']]})
+        # Groq uses 'assistant' instead of 'model'
+        role = "assistant" if msg['role'] == "model" else "user"
+        messages.append({"role": role, "content": msg['content']})
 
-    chat_session = model.start_chat(history=chat_history)
-    
+    # ADD CURRENT MESSAGE
+    messages.append({"role": "user", "content": user_message})
+
     try:
-        # Include System Prompt in the very first message context
-        full_input = f"System: {SYSTEM_PROMPT}\nUser: {user_message}" if not chat_history else user_message
-        response = chat_session.send_message(full_input)
-        ai_reply = response.text
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1024
+        )
         
-        # Save both messages to Redis for history
+        ai_reply = completion.choices[0].message.content
+        
+        # SAVE TO REDIS
         r.rpush(history_key, json.dumps({"role": "user", "content": user_message}))
         r.rpush(history_key, json.dumps({"role": "model", "content": ai_reply}))
         
         return jsonify({"reply": ai_reply})
+
     except Exception as e:
-        # Catch rate limits or API errors gracefully
         if "429" in str(e):
-            return jsonify({"error": "GURU is busy. Try again in 1 minute."}), 429
+            return jsonify({"error": "GURU is busy. Try again in 60 seconds."}), 429
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
     resp = make_response(jsonify({"message": "Logged out"}))
-    resp.set_cookie('auth_token', '', expires=0) # Clear the device memory
+    resp.set_cookie('auth_token', '', expires=0)
     return resp
 
 if __name__ == '__main__':
