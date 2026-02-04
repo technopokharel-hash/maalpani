@@ -5,12 +5,12 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
-# Path fix for local modules
+# Path fix for Vercel
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 try:
     from school_data import get_guru_prompt
 except ImportError:
-    def get_guru_prompt(): return "You are GURU, a school assistant."
+    def get_guru_prompt(): return "You are GURU, the school AI mentor."
 
 load_dotenv()
 app = Flask(__name__)
@@ -18,9 +18,9 @@ CORS(app, supports_credentials=True)
 
 # Configuration
 JWT_SECRET = os.environ.get("JWT_SECRET", "xavier_2026_key")
-MODEL_NAME = "gpt-4o-mini" # Standard OpenAI model
+MODEL_NAME = "gpt-4o-mini"
 
-# --- LAZY SERVICE SINGLETONS ---
+# --- LAZY SERVICES (Prevents Startup Crashes) ---
 _openai_client = None
 _redis_client = None
 
@@ -38,7 +38,7 @@ def get_redis():
         _redis_client = redis.from_url(os.environ.get("KV_URL"), decode_responses=True)
     return _redis_client
 
-# --- AUTH UTILS ---
+# --- AUTH HELPERS ---
 def get_user():
     token = request.cookies.get('token')
     if not token: return None
@@ -46,40 +46,39 @@ def get_user():
         return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])['username']
     except: return None
 
-# --- CORE ROUTES ---
+# --- ROUTES ---
 
 @app.route('/api/ping', methods=['GET'])
 def ping():
-    """Wakes up the server without a heavy AI load."""
-    return jsonify({"status": "ready", "version": "2.0.OpenAI"}), 200
+    return jsonify({"status": "ready", "service": "GURU-OpenAI"}), 200
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
     username = get_user()
     if not username: return jsonify({"error": "Unauthorized"}), 401
-
+    
     user_input = request.json.get('message')
-    if not user_input: return jsonify({"error": "No message"}), 400
+    if not user_input: return jsonify({"error": "Empty message"}), 400
 
     try:
         ai = get_openai()
         r = get_redis()
         history_key = f"chat:{username}"
         
-        # Build payload with system prompt + history
+        # Build prompt
         messages = [{"role": "system", "content": get_guru_prompt()}]
         
-        # Load last 6 messages from Redis
+        # Add history
         try:
             history = r.lrange(history_key, -6, -1)
             for m in history:
-                data = json.loads(m)
-                messages.append({"role": data['role'], "content": data['content']})
+                msg_data = json.loads(m)
+                messages.append({"role": msg_data['role'], "content": msg_data['content']})
         except: pass
 
         messages.append({"role": "user", "content": user_input})
 
-        # OpenAI Call
+        # OpenAI API Call
         response = ai.chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
@@ -88,14 +87,14 @@ def chat():
         
         reply = response.choices[0].message.content
 
-        # Save to Redis asynchronously
+        # Save to Redis
         r.rpush(history_key, json.dumps({"role": "user", "content": user_input}))
         r.rpush(history_key, json.dumps({"role": "assistant", "content": reply}))
-        r.ltrim(history_key, -20, -1) # Keep only last 20 messages
+        r.ltrim(history_key, -20, -1) 
 
         return jsonify({"reply": reply})
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Signup/Login would go here using the same 'get_redis()' helper
+# Add your Signup/Login logic here using 'get_redis()' for the 'r' client
+handler = app
