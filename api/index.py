@@ -3,94 +3,92 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-from api.school_data import get_guru_prompt
+# --- 1. ABSOLUTE PATH INJECTION ---
+# This fixes the 'ImportError' seen in your screenshots by telling Python exactly where to look.
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.append(CURRENT_DIR)
 
+try:
+    from school_data import get_guru_prompt
+except ImportError:
+    # Fallback if the file is moved or renamed during deployment
+    def get_guru_prompt(): return "You are GURU, a helpful school assistant."
+
+# --- 2. APP INITIALIZATION ---
 load_dotenv()
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-# LAZY LOADING HELPERS
-def get_services():
-    """Import and initialize ONLY when called to prevent startup crashes."""
-    from openai import OpenAI
-    import redis
-    
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    r = redis.from_url(os.environ.get("KV_URL"), decode_responses=True)
-    return client, r
-
-# Use the secret from your Vercel Dashboard
-JWT_SECRET = os.environ.get("JWT_SECRET")
+# Configuration from your Vercel Dashboard
+JWT_SECRET = os.environ.get("JWT_SECRET") 
 MODEL_NAME = "gpt-4o-mini"
 
-# --- LAZY SERVICES ---
-_openai_client = None
-_redis_client = None
+# --- 3. LAZY SERVICE HANDLER ---
+# We keep these 'None' at the top to prevent a crash if the network is slow during startup.
+_client = None
+_redis = None
 
-def get_openai():
-    global _openai_client
-    if _openai_client is None:
+def get_services():
+    """Initializes AI and Database only when a request actually arrives."""
+    global _client, _redis
+    if _client is None:
         from openai import OpenAI
-        _openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    return _openai_client
-
-def get_redis():
-    global _redis_client
-    if _redis_client is None:
+        _client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    if _redis is None:
         import redis
-        _redis_client = redis.from_url(os.environ.get("KV_URL"), decode_responses=True)
-    return _redis_client
+        _redis = redis.from_url(os.environ.get("KV_URL"), decode_responses=True)
+    return _client, _redis
 
-# --- ROUTES ---
+# --- 4. ROUTES ---
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    # 1. Check Auth
-    token = request.cookies.get('token')
-    if not token: return jsonify({"error": "Unauthorized"}), 401
     try:
+        # Check authentication first
+        token = request.cookies.get('token')
+        if not token: return jsonify({"error": "Unauthorized"}), 401
+        
         username = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])['username']
-    except: return jsonify({"error": "Session expired"}), 401
-
-    # 2. Get AI & DB
-    try:
-        ai = get_openai()
-        r = get_redis()
-        user_input = request.json.get('message')
+        
+        # Wake up services
+        ai, r = get_services()
+        
+        user_message = request.json.get('message')
         history_key = f"chat:{username}"
         
-        # Build prompt + last 5 messages
+        # Build prompt
         messages = [{"role": "system", "content": get_guru_prompt()}]
+        
+        # Safe history retrieval
         try:
             history = r.lrange(history_key, -5, -1)
             for m in history:
-                d = json.loads(m)
-                messages.append({"role": d['role'], "content": d['content']})
+                msg = json.loads(m)
+                messages.append({"role": msg['role'], "content": msg['content']})
         except: pass
 
-        messages.append({"role": "user", "content": user_input})
+        messages.append({"role": "user", "content": user_message})
 
         # OpenAI Call
-        response = ai.chat.completions.create(
-            model=MODEL_NAME,
-            messages=messages
-        )
-        reply = response.choices[0].message.content
+        completion = ai.chat.completions.create(model=MODEL_NAME, messages=messages)
+        reply = completion.choices[0].message.content
 
-        # Save History
-        r.rpush(history_key, json.dumps({"role": "user", "content": user_input}))
+        # Save to Redis
+        r.rpush(history_key, json.dumps({"role": "user", "content": user_message}))
         r.rpush(history_key, json.dumps({"role": "assistant", "content": reply}))
         r.ltrim(history_key, -20, -1)
 
         return jsonify({"reply": reply})
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # This will show up in your Vercel 'Functions' logs
+        print(f"Chat Error: {str(e)}")
+        return jsonify({"error": "Server is waking up, please try again."}), 503
 
-# Entry point for Vercel
+@app.route('/api/ping', methods=['GET'])
+def ping():
+    return jsonify({"status": "online", "secret_check": JWT_SECRET is not None}), 200
+
+# Vercel entry point
 handler = app
-
-@app.route('/api/debug-check')
-def debug_check():
-    # Only shows the length for security, not the actual secret
-    secret = os.environ.get("JWT_SECRET")
-    return f"Secret found! Length: {len(secret) if secret else 'Zero'}"
