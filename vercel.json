@@ -3,8 +3,6 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.py" },
     { "source": "/", "destination": "/public/index.html" },
-    { "source": "/login", "destination": "/public/login.html" },
-    { "source": "/signup", "destination": "/public/signup.html" },
     { "source": "/(.*)", "destination": "/public/$1" }
   ]
 }

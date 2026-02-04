@@ -1,22 +1,25 @@
 import os, json, jwt, sys
-from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
-# --- VERCEL PATH FIX ---
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-try:
-    from school_data import get_guru_prompt
-except ImportError:
-    def get_guru_prompt(): return "You are GURU, the school AI mentor."
+from api.school_data import get_guru_prompt
 
 load_dotenv()
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-# Config from Environment Variables
+# LAZY LOADING HELPERS
+def get_services():
+    """Import and initialize ONLY when called to prevent startup crashes."""
+    from openai import OpenAI
+    import redis
+    
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    r = redis.from_url(os.environ.get("KV_URL"), decode_responses=True)
+    return client, r
+
+# Use the secret from your Vercel Dashboard
 JWT_SECRET = os.environ.get("JWT_SECRET")
 MODEL_NAME = "gpt-4o-mini"
 
