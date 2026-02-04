@@ -17,7 +17,7 @@ app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
 # Config from Environment Variables
-JWT_SECRET = os.environ.get("JWT_SECRET", "xavier_2026_key")
+JWT_SECRET = os.environ.get("JWT_SECRET")
 MODEL_NAME = "gpt-4o-mini"
 
 # --- LAZY SERVICES ---
